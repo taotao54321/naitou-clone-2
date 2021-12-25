@@ -1,0 +1,6 @@
+[profile.release-lto]
+inherits = "release"
+lto = true
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-Ctarget-cpu=native"]
