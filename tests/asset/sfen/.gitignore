@@ -1,4 +1,4 @@
-# このディレクトリにはテスト用の sfen ファイルを入れる。
+# このディレクトリには sfen 読み書きテスト (tests/sfen.rs) 用のファイルを入れる。
 # たとえば [コンピュータ将棋互角局面集](https://github.com/tttak/ShogiGokakuKyokumen) のファイルなど。
 
 *
