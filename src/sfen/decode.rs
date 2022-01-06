@@ -6,6 +6,7 @@ use crate::shogi::*;
 /// 構文はチェックするが、合法性チェックは一切行わない。
 ///
 /// 文字列の先頭と末尾の空白は無視される。
+/// また、最初のトークンが "position" の場合、それは単に無視される。
 pub fn sfen_decode(s: impl AsRef<str>) -> anyhow::Result<(Side, Board, Hands, Vec<Move>)> {
     // 先頭と末尾の空白は無視する。
     let s = s.as_ref().trim();
@@ -34,6 +35,7 @@ pub fn sfen_decode(s: impl AsRef<str>) -> anyhow::Result<(Side, Board, Hands, Ve
 /// 構文はチェックするが、合法性チェックは一切行わない。
 ///
 /// 文字列の先頭と末尾の空白は無視される。
+/// また、最初のトークンが "position" の場合、それは単に無視される。
 pub fn sfen_decode_position(s: impl AsRef<str>) -> anyhow::Result<(Side, Board, Hands)> {
     // 先頭と末尾の空白は無視する。
     let s = s.as_ref().trim();
@@ -53,6 +55,14 @@ fn sfen_decode_position_from_iter<'a, I>(it: &mut I) -> anyhow::Result<(Side, Bo
 where
     I: Iterator<Item = &'a str>,
 {
+    let mut it = it.peekable();
+
+    // 最初のトークンが "position" なら単に無視する。
+    // 外部アプリは "position" を付けたり付けなかったりまちまちなので、それへの対処。
+    if it.peek().context("position string is empty")? == &"position" {
+        it.next();
+    }
+
     let magic = it.next().context("position string is empty")?;
 
     if magic == "startpos" {
