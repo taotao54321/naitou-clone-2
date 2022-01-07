@@ -39,7 +39,7 @@ pub struct Position {
 
     king_sq: KingSq, // 各陣営の玉位置
 
-    com_piece_count: u32, // COM 側の駒数(盤上の駒と手駒の合計)
+    com_nonking_count: u32, // COM 側の玉以外の駒数(盤上の駒と手駒の合計)
 }
 
 impl Position {
@@ -74,9 +74,9 @@ impl Position {
             EffectCountBoards::from([EffectCountBoard::empty(), EffectCountBoard::empty()]);
         let ranged_effects = RangedEffectBoard::empty();
 
-        let mut com_piece_count = bb_occ_side[COM].count_ones();
+        let mut com_nonking_count = bb_occ_side[COM].count_ones() - 1;
         for pk in PieceKind::iter_hand() {
-            com_piece_count += hands[COM][pk];
+            com_nonking_count += hands[COM][pk];
         }
 
         let mut this = Self {
@@ -94,7 +94,7 @@ impl Position {
 
             king_sq,
 
-            com_piece_count,
+            com_nonking_count,
         };
 
         let (effect_counts, ranged_effects) = calc_effect(&this);
@@ -168,10 +168,10 @@ impl Position {
         self.king_sq[side]
     }
 
-    /// COM 側の駒数(盤上の駒と手駒の合計)を返す。
+    /// COM 側の玉以外の駒数(盤上の駒と手駒の合計)を返す。
     /// 全駒勝利手順を求める際の枝刈りに使う。
-    pub fn com_piece_count(&self) -> u32 {
-        self.com_piece_count
+    pub fn com_nonking_count(&self) -> u32 {
+        self.com_nonking_count
     }
 
     /// 指し手で局面を進め、`UndoableMove` を返す。
@@ -273,9 +273,9 @@ impl Position {
 
             // COM 側の駒数を更新。
             if us == HUM {
-                self.com_piece_count -= 1;
+                self.com_nonking_count -= 1;
             } else {
-                self.com_piece_count += 1;
+                self.com_nonking_count += 1;
             }
         }
 
@@ -808,9 +808,9 @@ impl Position {
 
             // COM 側の駒数を復元。
             if us == HUM {
-                self.com_piece_count += 1;
+                self.com_nonking_count += 1;
             } else {
-                self.com_piece_count -= 1;
+                self.com_nonking_count -= 1;
             }
         }
 
