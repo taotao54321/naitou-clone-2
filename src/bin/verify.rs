@@ -10,8 +10,14 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
+    #[structopt(long)]
+    timelimit: bool,
+
     #[structopt(parse(from_os_str))]
     path_rom: PathBuf,
+
+    #[structopt(required = true, parse(from_os_str))]
+    paths_sfen: Vec<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -19,7 +25,7 @@ fn main() -> anyhow::Result<()> {
 
     let opt = Opt::from_args();
 
-    let suite = test_suite()?;
+    let suite = test_suite(&opt.paths_sfen, opt.timelimit)?;
 
     for (name, idx, sfen, timelimit) in suite {
         let lineno = idx + 1;
@@ -43,22 +49,15 @@ fn main() -> anyhow::Result<()> {
 }
 
 /// verify 用の全棋譜を返す。個々の要素は (name, idx, sfen, timelimit)。
-///
-/// tests/asset/verify/{notimelimit,timelimit}/ 以下の *.sfen ファイルが対象。
-fn test_suite() -> anyhow::Result<Vec<(String, usize, String, bool)>> {
-    const VERIFY_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/asset/verify");
-
-    let paths_notimelimit = paths_in_directory(format!("{}/notimelimit", VERIFY_DIR))?;
-    let paths_timelimit = paths_in_directory(format!("{}/timelimit", VERIFY_DIR))?;
-
-    let it = paths_notimelimit
-        .into_iter()
-        .map(|path| (path, false))
-        .chain(paths_timelimit.into_iter().map(|path| (path, true)));
-
+fn test_suite<P>(paths: &[P], timelimit: bool) -> anyhow::Result<Vec<(String, usize, String, bool)>>
+where
+    P: AsRef<Path>,
+{
     let mut suite = Vec::<(String, usize, String, bool)>::new();
 
-    for (path, timelimit) in it {
+    for path in paths {
+        let path = path.as_ref();
+
         // *.sfen のみを抽出。
         let name = match path.file_stem().and_then(OsStr::to_str) {
             Some(name) => name,
@@ -74,7 +73,7 @@ fn test_suite() -> anyhow::Result<Vec<(String, usize, String, bool)>> {
 
         // ファイル内の全ての行を sfen 文字列とみなして追加。
         // ただし空行とコメント行(0 個以上の空白と '#' から始まる行)は除く。
-        for (idx, line) in std::fs::read_to_string(&path)?.lines().enumerate() {
+        for (idx, line) in std::fs::read_to_string(path)?.lines().enumerate() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
@@ -85,15 +84,6 @@ fn test_suite() -> anyhow::Result<Vec<(String, usize, String, bool)>> {
     }
 
     Ok(suite)
-}
-
-/// 指定したディレクトリ直下の全てのパスを返す。
-fn paths_in_directory(dir: impl AsRef<Path>) -> anyhow::Result<Vec<PathBuf>> {
-    let paths = std::fs::read_dir(dir)?
-        .map(|e| e.map(|e| e.path()))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(paths)
 }
 
 /// trace コマンドによりクローンの思考ログをとる。
