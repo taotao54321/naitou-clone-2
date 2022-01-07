@@ -69,8 +69,7 @@ fn test_perft_startpos() {
     // リリースモードでテストする場合は初期化が必要。
     bbs::init();
 
-    let (side_to_move, board, hands) = sfen_decode_position(SFEN).unwrap();
-    let mut pos = Position::new(side_to_move, board, hands);
+    let mut pos = sfen_to_position(SFEN);
 
     assert_eq!(
         do_perft(&mut pos, 1),
@@ -143,8 +142,7 @@ fn test_perft_max_moves() {
     // リリースモードでテストする場合は初期化が必要。
     bbs::init();
 
-    let (side_to_move, board, hands) = sfen_decode_position(SFEN).unwrap();
-    let mut pos = Position::new(side_to_move, board, hands);
+    let mut pos = sfen_to_position(SFEN);
 
     assert_eq!(
         do_perft(&mut pos, 1),
@@ -179,4 +177,10 @@ fn test_perft_max_moves() {
             count_checkmate: 566203,
         }
     );
+}
+
+fn sfen_to_position(sfen: &str) -> Position {
+    let (side_to_move, board, hands) = sfen_decode_position(sfen).unwrap();
+
+    Position::new(side_to_move, board, hands)
 }
