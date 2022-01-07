@@ -21,16 +21,19 @@ fn main() -> anyhow::Result<()> {
 
     let suite = test_suite()?;
 
-    for (stem, sfen, timelimit) in suite {
+    for (name, idx, sfen, timelimit) in suite {
+        let lineno = idx + 1;
+        let filename_base = format!("{}-{:03}", name, lineno);
+
         let log_lib = trace(&sfen, timelimit)?;
         let log_emu = emu_trace(&opt.path_rom, &sfen, timelimit)?;
 
         if log_lib == log_emu {
-            println!("{}: OK", stem);
+            println!("{}: OK", filename_base);
         } else {
-            println!("{}: Failed (logs are saved in {}/", stem, LOG_DIR);
-            let path_log_lib = format!("{}/{}-lib.log", LOG_DIR, stem);
-            let path_log_emu = format!("{}/{}-emu.log", LOG_DIR, stem);
+            println!("{}: Failed (logs are saved in {}/", filename_base, LOG_DIR);
+            let path_log_lib = format!("{}/{}-lib.log", LOG_DIR, filename_base);
+            let path_log_emu = format!("{}/{}-emu.log", LOG_DIR, filename_base);
             std::fs::write(path_log_lib, log_lib)?;
             std::fs::write(path_log_emu, log_emu)?;
         }
@@ -39,10 +42,10 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// verify 用の全棋譜を返す。個々の要素は (stem, sfen, timelimit)。
+/// verify 用の全棋譜を返す。個々の要素は (name, idx, sfen, timelimit)。
 ///
 /// tests/asset/verify/{notimelimit,timelimit}/ 以下の *.sfen ファイルが対象。
-fn test_suite() -> anyhow::Result<Vec<(String, String, bool)>> {
+fn test_suite() -> anyhow::Result<Vec<(String, usize, String, bool)>> {
     const VERIFY_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/asset/verify");
 
     let paths_notimelimit = paths_in_directory(format!("{}/notimelimit", VERIFY_DIR))?;
@@ -53,12 +56,12 @@ fn test_suite() -> anyhow::Result<Vec<(String, String, bool)>> {
         .map(|path| (path, false))
         .chain(paths_timelimit.into_iter().map(|path| (path, true)));
 
-    let mut suite = Vec::<(String, String, bool)>::new();
+    let mut suite = Vec::<(String, usize, String, bool)>::new();
 
     for (path, timelimit) in it {
         // *.sfen のみを抽出。
-        let stem = match path.file_stem().and_then(OsStr::to_str) {
-            Some(stem) => stem,
+        let name = match path.file_stem().and_then(OsStr::to_str) {
+            Some(name) => name,
             None => continue,
         };
         let ext = match path.extension().and_then(OsStr::to_str) {
@@ -69,8 +72,16 @@ fn test_suite() -> anyhow::Result<Vec<(String, String, bool)>> {
             continue;
         }
 
-        let sfen = std::fs::read_to_string(&path)?;
-        suite.push((stem.to_owned(), sfen, timelimit));
+        // ファイル内の全ての行を sfen 文字列とみなして追加。
+        // ただし空行とコメント行(0 個以上の空白と '#' から始まる行)は除く。
+        for (idx, line) in std::fs::read_to_string(&path)?.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+
+            suite.push((name.to_owned(), idx, line.to_owned(), timelimit));
+        }
     }
 
     Ok(suite)
