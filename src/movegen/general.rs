@@ -270,6 +270,38 @@ fn generate_moves_drop_knight(us: Side, bb_target: Bitboard, mvs: &mut MoveArray
     });
 }
 
+/// 指定した局面における全ての駒取りの疑似合法手を生成する。
+pub fn generate_captures(pos: &Position) -> MoveArray {
+    let us = pos.side_to_move();
+    let them = us.inv();
+
+    let mut mvs = MoveArray::new();
+
+    // 敵駒のあるマスのみを移動先とする。
+    let bb_target = pos.bb_occupied_side(them);
+
+    // 駒取りなので、盤上の駒を動かす指し手のみ生成。
+
+    generate_moves_walk_pawn(pos, bb_target, &mut mvs);
+
+    generate_moves_walk(pos, bb_target, LANCE, &mut mvs);
+    generate_moves_walk(pos, bb_target, KNIGHT, &mut mvs);
+    generate_moves_walk(pos, bb_target, SILVER, &mut mvs);
+    generate_moves_walk(pos, bb_target, BISHOP, &mut mvs);
+    generate_moves_walk(pos, bb_target, ROOK, &mut mvs);
+
+    generate_moves_walk(pos, bb_target, GOLD, &mut mvs);
+    generate_moves_walk(pos, bb_target, KING, &mut mvs);
+    generate_moves_walk(pos, bb_target, PRO_PAWN, &mut mvs);
+    generate_moves_walk(pos, bb_target, PRO_LANCE, &mut mvs);
+    generate_moves_walk(pos, bb_target, PRO_KNIGHT, &mut mvs);
+    generate_moves_walk(pos, bb_target, PRO_SILVER, &mut mvs);
+    generate_moves_walk(pos, bb_target, HORSE, &mut mvs);
+    generate_moves_walk(pos, bb_target, DRAGON, &mut mvs);
+
+    mvs
+}
+
 /// 指定した局面における全ての疑似王手回避手(必ずしも王手を回避しない)を生成する。
 /// 手番の側に王手がかかっていることを仮定している。
 ///
