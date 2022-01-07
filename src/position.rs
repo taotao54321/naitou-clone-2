@@ -38,6 +38,8 @@ pub struct Position {
     ply: u32, // 常に 1 から始まるものとする。
 
     king_sq: KingSq, // 各陣営の玉位置
+
+    com_piece_count: u32, // COM 側の駒数(盤上の駒と手駒の合計)
 }
 
 impl Position {
@@ -72,6 +74,11 @@ impl Position {
             EffectCountBoards::from([EffectCountBoard::empty(), EffectCountBoard::empty()]);
         let ranged_effects = RangedEffectBoard::empty();
 
+        let mut com_piece_count = bb_occ_side[COM].count_ones();
+        for pk in PieceKind::iter_hand() {
+            com_piece_count += hands[COM][pk];
+        }
+
         let mut this = Self {
             bb_occ,
             bb_occ_side,
@@ -86,6 +93,8 @@ impl Position {
             ply: 1,
 
             king_sq,
+
+            com_piece_count,
         };
 
         let (effect_counts, ranged_effects) = calc_effect(&this);
@@ -157,6 +166,12 @@ impl Position {
     /// 指定した陣営の玉位置を返す。
     pub fn king_square(&self, side: Side) -> Square {
         self.king_sq[side]
+    }
+
+    /// COM 側の駒数(盤上の駒と手駒の合計)を返す。
+    /// 全駒勝利手順を求める際の枝刈りに使う。
+    pub fn com_piece_count(&self) -> u32 {
+        self.com_piece_count
     }
 
     /// 指し手で局面を進め、`UndoableMove` を返す。
@@ -255,6 +270,13 @@ impl Position {
 
             // 捕獲した駒を盤上から除去する。
             self.remove_piece(dst);
+
+            // COM 側の駒数を更新。
+            if us == HUM {
+                self.com_piece_count -= 1;
+            } else {
+                self.com_piece_count += 1;
+            }
         }
 
         // 移動元から駒を除去し、移動先に移動後の駒を置く。
@@ -783,6 +805,13 @@ impl Position {
 
             // 利き情報を復元。
             self.revert_effect_by_capture(src, dst, pc_src, pc_dst, pc_captured);
+
+            // COM 側の駒数を復元。
+            if us == HUM {
+                self.com_piece_count += 1;
+            } else {
+                self.com_piece_count -= 1;
+            }
         }
 
         // 玉を動かした場合、玉位置を戻す。

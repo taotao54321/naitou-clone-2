@@ -1182,6 +1182,12 @@ impl PieceKind {
         .into_iter()
     }
 
+    /// 手駒となりうる駒種を昇順に列挙する。
+    pub fn iter_hand(
+    ) -> impl Iterator<Item = Self> + DoubleEndedIterator + ExactSizeIterator + FusedIterator {
+        [PAWN, LANCE, KNIGHT, SILVER, BISHOP, ROOK, GOLD].into_iter()
+    }
+
     /// 内部値を返す。`const` 文脈で使える。
     pub const fn inner(self) -> u32 {
         self.0
