@@ -4,18 +4,28 @@
 use std::num::NonZeroU32;
 
 use anyhow::{bail, ensure};
-use rayon::prelude::*;
 use structopt::StructOpt;
 
 use naitou_clone::*;
 
 #[derive(Debug, StructOpt)]
 struct Opt {
+    /// 原作における時間制限設定。平手の戦型選択に影響する。
     #[structopt(long)]
     timelimit: bool,
 
+    /// スレッド数。省略した場合、論理 CPU 数となる。
+    #[structopt(long)]
+    thread_count: Option<NonZeroU32>,
+
+    /// マルチスレッド探索を開始する深さ。省略すると探索深さの半分(切り上げ)となる。
+    #[structopt(long)]
+    branch_depth: Option<NonZeroU32>,
+
+    /// 棋譜の sfen 文字列。
     sfen: String,
 
+    /// 棋譜の最終局面からの探索深さ。
     depth: NonZeroU32,
 }
 
@@ -24,23 +34,44 @@ fn main() -> anyhow::Result<()> {
 
     let opt = Opt::from_args();
 
+    let thread_count = opt
+        .thread_count
+        .unwrap_or_else(|| NonZeroU32::new(u32::try_from(num_cpus::get()).unwrap()).unwrap());
+    eprintln!("Thread count: {}", thread_count);
+
+    let branch_depth = opt
+        .branch_depth
+        .unwrap_or_else(|| NonZeroU32::new((opt.depth.get() + 1) / 2).unwrap());
+    assert!(branch_depth.get() <= opt.depth.get());
+    eprintln!("Branch depth: {}", branch_depth);
+    eprintln!("Target depth: {}", opt.depth);
+
     let (handicap, engine, history) = init(opt.sfen, opt.timelimit)?;
 
-    // HUM 側の初手(疑似合法手)を列挙する。
-    let mvs = {
-        let pos = engine.position();
-        if pos.is_checked(HUM) {
-            generate_evasions(pos)
-        } else {
-            generate_moves(pos)
-        }
-    };
+    let handles: Vec<_> = (0..thread_count.get())
+        .map(|thread_id| {
+            let engine = engine.clone();
+            let history = history.clone();
+            std::thread::spawn(move || {
+                let thread_count = thread_count.get();
+                let branch_depth = opt.depth.get() - branch_depth.get();
+                let mut solver = Solver {
+                    thread_count,
+                    thread_id,
+                    branch_depth,
+                    branch_idx: thread_count - 1, // ノード番号を 0 から始めるため(最初にインクリメントするので)
+                    handicap,
+                    engine,
+                    history,
+                };
+                solver.solve(opt.depth.get());
+            })
+        })
+        .collect();
 
-    // 全ての初手を複数スレッドで分散処理する。
-    mvs.into_par_iter().for_each(|&mv| {
-        let mut solver = Solver::new(handicap, engine.clone(), history.clone());
-        solver.solve(mv, opt.depth.get());
-    });
+    for handle in handles {
+        handle.join().unwrap();
+    }
 
     Ok(())
 }
@@ -83,45 +114,45 @@ fn init(sfen: impl AsRef<str>, timelimit: bool) -> anyhow::Result<(Handicap, Eng
 
 #[derive(Debug)]
 struct Solver {
+    // 総スレッド数。
+    thread_count: u32,
+
+    // このソルバーを実行するスレッドID。0..=thread_count-1 の値をとる。
+    thread_id: u32,
+
+    // マルチスレッド探索を開始する **残り深さ**。
+    branch_depth: u32,
+
+    // 残り深さ branch_depth における (ノード番号) % thread_count の値。
+    // この値が thread_id と等しい場合のみ探索を続ける。
+    // これにより、似た局面がスレッド別に振り分けられ、スレッド間のノード数の偏りが抑えられる。
+    // ただし、代償として残り深さが branch_depth より大きい部分木は全スレッドで重複して探索することになる。
+    //
+    // ref: https://twitter.com/toku51n/status/1479463700721733632
+    branch_idx: u32,
+
     handicap: Handicap,
     engine: Engine,
     history: Vec<Move>,
 }
 
 impl Solver {
-    fn new(handicap: Handicap, engine: Engine, history: Vec<Move>) -> Self {
-        Self {
-            handicap,
-            engine,
-            history,
-        }
-    }
-
-    /// 指定した初手で指定した深さまで探索する。
-    fn solve(&mut self, mv_first: Move, depth: u32) {
-        // 初手を指す。これが自殺手ならエラーが返されるので何もしない。
-        if let Ok(resp) = self.engine.do_step(mv_first) {
-            self.history.push(mv_first);
-
-            match resp {
-                EngineResponse::Move(resp_move) => {
-                    // 通常の指し手が返されたら手順を記録し、深さ depth-1 で探索。
-                    self.history.push(Move::from(resp_move.move_com()));
-                    self.solve_dfs(depth - 1);
-                }
-                EngineResponse::HumWin(_) => {
-                    // HUM 勝ちなら単に棋譜を出力。
-                    self.print_solution();
-                }
-                // HUM 負けなら何もしない。
-                _ => {}
-            }
-        }
-    }
-
-    fn solve_dfs(&mut self, depth: u32) {
+    /// 残り深さ depth まで探索。
+    fn solve(&mut self, depth: u32) {
         if depth == 0 {
             return;
+        }
+
+        if depth == self.branch_depth {
+            // branch_idx をインクリメント(mod thread_count)。
+            self.branch_idx += 1;
+            if self.branch_idx == self.thread_count {
+                self.branch_idx = 0;
+            }
+            // スレッドIDが branch_idx と等しい場合のみ探索を続ける。
+            if self.thread_id != self.branch_idx {
+                return;
+            }
         }
 
         // HUM 側の疑似合法手を列挙する。
@@ -142,14 +173,18 @@ impl Solver {
                         // 通常の指し手が返されたら探索を進める。
                         self.history.push(mv);
                         self.history.push(Move::from(resp_move.move_com()));
-                        self.solve_dfs(depth - 1);
-                        self.history.truncate(self.history.len() - 2);
+                        self.solve(depth - 1);
+                        self.history.truncate(self.history.len() - 2); // 2 回 pop するのと同じ
                     }
                     EngineResponse::HumWin(_) => {
                         // HUM 勝ちなら棋譜を出力。
-                        self.history.push(mv);
-                        self.print_solution();
-                        self.history.pop();
+                        // 残り深さが branch_depth より大きい場合、全スレッドで重複して探索されるので、
+                        // スレッドIDが 0 の場合のみ出力する。
+                        if depth <= self.branch_depth || self.thread_id == 0 {
+                            self.history.push(mv);
+                            self.print_solution();
+                            self.history.pop();
+                        }
                     }
                     // HUM 負けなら何もしない。
                     _ => {}
