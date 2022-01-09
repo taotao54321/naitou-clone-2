@@ -4,7 +4,7 @@
 //! **プログラム起動直後に必ず `init()` で初期化すること**。
 
 pub mod addrs;
-mod apsp;
+pub mod apsp;
 mod backend;
 mod naitou;
 

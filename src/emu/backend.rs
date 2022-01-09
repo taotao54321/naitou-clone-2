@@ -154,3 +154,21 @@ pub fn run_frame_headless(buttons: Buttons) {
 pub fn run_frame_hooked_headless(buttons: Buttons, f_hook: &dyn FnMut(u16)) {
     fceux::run_frame(buttons.inner(), 0, |_, _| {}, f_hook);
 }
+
+/// エミュレータの状態のスナップショット。ステートセーブ/ロード用。
+pub type Snapshot = fceux::Snapshot;
+
+/// `Snapshot` オブジェクトを作成する。これだけではステートセーブは行われない。
+pub fn snapshot_create() -> Snapshot {
+    fceux::snapshot_create()
+}
+
+/// ステートセーブする。
+pub fn snapshot_load(snap: &Snapshot) {
+    fceux::snapshot_load(snap).expect("snapshot_load() failed");
+}
+
+/// ステートロードする。
+pub fn snapshot_save(snap: &Snapshot) {
+    fceux::snapshot_save(snap).expect("snapshot_save() failed");
+}
