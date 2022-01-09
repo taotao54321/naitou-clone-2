@@ -426,6 +426,9 @@ pub fn inputs_move(mv: Move) -> Vec<Buttons> {
     // 指し手をカーソル対に変換。
     let (cursor_src, cursor_dst) = move_to_cursors(mv);
 
+    // 1F の無入力を入れないとごく稀に再現失敗する。
+    inputs.push(Buttons::empty());
+
     // 現在のカーソル位置から cursor_src へ移動する入力。
     inputs.extend(cursor_motion(read_cursor(), cursor_src, 6));
 
