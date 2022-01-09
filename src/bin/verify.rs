@@ -6,6 +6,7 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
+use anyhow::ensure;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -96,7 +97,14 @@ fn trace(sfen: &str, timelimit: bool) -> anyhow::Result<String> {
     }
     cmd.arg(sfen);
 
-    let res = String::from_utf8(cmd.output()?.stdout)?;
+    let output = cmd.output()?;
+    ensure!(
+        output.status.success(),
+        "trace failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let res = String::from_utf8(output.stdout)?;
 
     Ok(res)
 }
@@ -119,7 +127,14 @@ fn emu_trace(path_rom: &Path, sfen: &str, timelimit: bool) -> anyhow::Result<Str
     }
     cmd.args([path_rom.to_str().unwrap(), sfen]);
 
-    let res = String::from_utf8(cmd.output()?.stdout)?;
+    let output = cmd.output()?;
+    ensure!(
+        output.status.success(),
+        "emu_trace failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let res = String::from_utf8(output.stdout)?;
 
     Ok(res)
 }
