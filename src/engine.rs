@@ -1384,8 +1384,7 @@ impl Engine {
             // これは裏技的要素と思われる(いきなり右桂を跳ね出して５三を破る手が成立する)。
             let disadv_price = self.evaluate_book_move(book_mv);
             if disadv_price > 0
-                && self.progress_ply <= 6
-                && mv_hum.map_or(false, |mv| mv.dst() != SQ_45)
+                && !(self.progress_ply <= 6 && mv_hum.map_or(false, |mv| mv.dst() == SQ_45))
             {
                 continue;
             }
