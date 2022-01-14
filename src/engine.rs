@@ -200,7 +200,8 @@ pub struct LeafEvaluation {
     /// *ルート局面での* COM 玉位置からちょうど距離 1 で、`(HUM 利き数) >= (COM 利き数)` なるマスの個数。
     pub com_king_choke_count_around8: u8,
 
-    /// 候補手の移動元から *ルート局面での* COM 玉位置への距離。候補手が駒打ちなら意味を持たない。
+    /// 候補手の移動元から *ルート局面での* COM 玉位置への距離。
+    /// ただし候補手が駒打ちの場合、移動先からの距離。
     pub src_to_com_king: u8,
 
     /// 候補手の移動先から *ルート局面での* HUM 玉位置への距離。
@@ -790,9 +791,11 @@ impl Engine {
         });
 
         // 指し手と互いの玉との位置関係を評価。
-        if !umv.is_drop() {
-            leaf_eval.src_to_com_king = umv.src().distance(com_king_sq);
-        }
+        leaf_eval.src_to_com_king = if umv.is_drop() {
+            umv.dst().distance(com_king_sq)
+        } else {
+            umv.src().distance(com_king_sq)
+        };
         leaf_eval.dst_to_hum_king = umv.dst().distance(hum_king_sq);
 
         // HUM 側の垂れ歩/垂れ香の評価。敵陣 1 段目の歩/香は存在しないと仮定している。

@@ -547,6 +547,7 @@ pub fn log_best(best_mv: Option<Move>, best_eval: &LeafEvaluation) {
         "  com_king_threat_around25: {}",
         best_eval.com_king_threat_around25
     );
+    info!("  src_to_com_king: {}", best_eval.src_to_com_king);
     info!("  dst_to_hum_king: {}", best_eval.dst_to_hum_king);
     info!("  com_promo_count: {}", best_eval.com_promo_count);
     info!("  com_loose_count: {}", best_eval.com_loose_count);
@@ -581,6 +582,7 @@ fn log_leaf_evaluation_impl(leaf_eval: &LeafEvaluation) {
         "  com_king_choke_count_around8: {}",
         leaf_eval.com_king_choke_count_around8
     );
+    info!("  src_to_com_king: {}", leaf_eval.src_to_com_king);
     info!("  dst_to_hum_king: {}", leaf_eval.dst_to_hum_king);
     info!("  hum_hanging: {}", leaf_eval.hum_hanging);
     info!("  com_promo_count: {}", leaf_eval.com_promo_count);
