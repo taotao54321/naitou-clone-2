@@ -6,7 +6,6 @@
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
-use anyhow::ensure;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -32,8 +31,8 @@ fn main() -> anyhow::Result<()> {
         let lineno = idx + 1;
         let filename_base = format!("{}-{:03}", name, lineno);
 
-        let log_lib = trace(&sfen, timelimit)?;
-        let log_emu = emu_trace(&opt.path_rom, &sfen, timelimit)?;
+        let log_lib = trace(&filename_base, &sfen, timelimit)?;
+        let log_emu = emu_trace(&opt.path_rom, &filename_base, &sfen, timelimit)?;
 
         if log_lib == log_emu {
             println!("{}: OK", filename_base);
@@ -88,7 +87,7 @@ where
 }
 
 /// trace コマンドによりクローンの思考ログをとる。
-fn trace(sfen: &str, timelimit: bool) -> anyhow::Result<String> {
+fn trace(filename_base: &str, sfen: &str, timelimit: bool) -> anyhow::Result<String> {
     let mut cmd = std::process::Command::new("cargo");
 
     cmd.args(["run", "--release", "--bin", "trace", "--"]);
@@ -98,11 +97,15 @@ fn trace(sfen: &str, timelimit: bool) -> anyhow::Result<String> {
     cmd.arg(sfen);
 
     let output = cmd.output()?;
-    ensure!(
-        output.status.success(),
-        "trace failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+
+    // 終了ステータスが失敗を示している場合、報告のみ行う。
+    if !output.status.success() {
+        eprintln!(
+            "{}: trace failed:\n{}",
+            filename_base,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     let res = String::from_utf8(output.stdout)?;
 
@@ -110,7 +113,12 @@ fn trace(sfen: &str, timelimit: bool) -> anyhow::Result<String> {
 }
 
 /// emu_trace コマンドによりエミュレータの思考ログをとる。
-fn emu_trace(path_rom: &Path, sfen: &str, timelimit: bool) -> anyhow::Result<String> {
+fn emu_trace(
+    path_rom: &Path,
+    filename_base: &str,
+    sfen: &str,
+    timelimit: bool,
+) -> anyhow::Result<String> {
     let mut cmd = std::process::Command::new("cargo");
 
     cmd.args([
@@ -128,11 +136,15 @@ fn emu_trace(path_rom: &Path, sfen: &str, timelimit: bool) -> anyhow::Result<Str
     cmd.args([path_rom.to_str().unwrap(), sfen]);
 
     let output = cmd.output()?;
-    ensure!(
-        output.status.success(),
-        "emu_trace failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+
+    // 終了ステータスが失敗を示している場合、報告のみ行う。
+    if !output.status.success() {
+        eprintln!(
+            "{}: emu_trace failed:\n{}",
+            filename_base,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     let res = String::from_utf8(output.stdout)?;
 
