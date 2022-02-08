@@ -4,6 +4,7 @@
 use std::num::NonZeroU32;
 
 use anyhow::{bail, ensure};
+use arrayvec::ArrayVec;
 use structopt::StructOpt;
 
 use naitou_clone::*;
@@ -158,7 +159,7 @@ impl Solver {
             }
         }
 
-        // HUM 側の指し手を列挙する。
+        // HUM 側の指し手(待ったフラグ込み)を列挙する。
         // (残り深さ) == (COM 駒数) ならば駒取りの指し手のみを生成。
         // さもなくば通常の指し手を生成。
         let mvs = {
@@ -171,6 +172,11 @@ impl Solver {
                 generate_moves(pos)
             }
         };
+        let mvs = iter_moves(
+            mvs,
+            self.engine.progress_ply(),
+            self.engine.progress_level(),
+        );
 
         // 指し手を順に試す。自殺手の場合はエラーが返されるのでスキップ。
         for mv in mvs {
@@ -208,4 +214,20 @@ impl Solver {
         let sfen = sfen_encode(side_to_move, &board, &hands, &self.history);
         println!("{}", sfen);
     }
+}
+
+/// 待ったフラグ込みで疑似合法手を列挙する。
+fn iter_moves(mvs: MoveArray, progress_ply: u8, progress_level: u8) -> impl Iterator<Item = Move> {
+    // プレイヤー先手の場合、初手では待った技が使えないことに注意。
+    // (どうやってもCOMが自力で考えた最善手が quiet にしかならないので)
+    let gen_matta = progress_ply != 0 && progress_level == 0;
+
+    mvs.into_iter().flat_map(move |mv| {
+        let mut ary = ArrayVec::<Move, 2>::new();
+        ary.push(mv);
+        if gen_matta {
+            ary.push(Move::new_matta(mv));
+        }
+        ary
+    })
 }

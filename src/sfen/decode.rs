@@ -7,6 +7,8 @@ use crate::shogi::*;
 ///
 /// 文字列の先頭と末尾の空白は無視される。
 /// また、最初のトークンが "position" の場合、それは単に無視される。
+///
+/// 待ったフラグを持つ指し手は先頭に '!' を付けて表す(独自拡張)。
 pub fn sfen_decode(s: impl AsRef<str>) -> anyhow::Result<(Side, Board, Hands, Vec<Move>)> {
     // 先頭と末尾の空白は無視する。
     let s = s.as_ref().trim();
@@ -295,9 +297,22 @@ pub fn sfen_decode_move(s: impl AsRef<str>) -> anyhow::Result<Move> {
 }
 
 fn sfen_decode_move_impl(s: &str) -> anyhow::Result<Move> {
+    // 待ったフラグを持つ指し手は先頭に '!' を付けて表す(独自拡張)。
+    let c_first = *s
+        .chars()
+        .peekable()
+        .peek()
+        .context("move string is empty")?;
+    let (s, matta) = if c_first == '!' {
+        (&s[1..], true)
+    } else {
+        (s, false)
+    };
+
     sfen_decode_move_walk(s)
         .or_else(|| sfen_decode_move_drop(s))
         .ok_or_else(|| anyhow!("invalid move string: {}", s))
+        .map(|mv| if matta { Move::new_matta(mv) } else { mv })
 }
 
 fn sfen_decode_move_walk(s: &str) -> Option<Move> {
@@ -373,5 +388,18 @@ fn sfen_decode_move_drop_piece_kind(c: char) -> Option<PieceKind> {
         'L' => Some(LANCE),
         'P' => Some(PAWN),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_matta() {
+        assert_eq!(
+            sfen_decode_move("!7g7f").unwrap(),
+            Move::new_matta(Move::new_walk(SQ_77, SQ_76))
+        );
     }
 }

@@ -1406,12 +1406,11 @@ impl std::fmt::Debug for Piece {
 ///
 /// `u32` に pack されている。ビットレイアウトはやねうら王からのパクリ:
 ///
-/// * bit0-6:   移動先
-/// * bit7-13:  移動元(駒打ちなら打った駒種)
-/// * bit14:    駒打ちか
-/// * bit15:    成りか
-///
-/// `u16` にも収まるが、置換表を使わない場合サイズを切り詰める意義があるか微妙なので `u32` にしておく。
+/// * bit0-6:  移動先
+/// * bit7-13: 移動元(駒打ちなら打った駒種)
+/// * bit14:   駒打ちか
+/// * bit15:   成りか
+/// * bit31:   待ったを用いて進行度を進めるか
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[repr(transparent)]
 pub struct Move(u32);
@@ -1419,6 +1418,7 @@ pub struct Move(u32);
 impl Move {
     const FLAG_DROP: u32 = 1 << 14;
     const FLAG_PROMOTION: u32 = 1 << 15;
+    const FLAG_MATTA: u32 = 1 << 31;
 
     /// 盤上の駒を動かして成らない指し手を作る。
     ///
@@ -1451,6 +1451,14 @@ impl Move {
         debug_assert!(dst.is_on_board());
 
         Self((dst.0 as u32) | (pk.0 << 7) | Self::FLAG_DROP)
+    }
+
+    /// 既存の指し手に待ったフラグを付加した指し手を返す。
+    /// 既存の指し手は待ったフラグを持っていてはならない。
+    pub const fn new_matta(self) -> Self {
+        debug_assert!(!self.is_matta());
+
+        Self(self.0 | Self::FLAG_MATTA)
     }
 
     /// 指し手が有効かどうかを返す。盤面は考慮しない。
@@ -1504,6 +1512,11 @@ impl Move {
 
         PieceKind((self.0 >> 7) & 0x7F)
     }
+
+    /// 待ったフラグを返す。
+    pub const fn is_matta(self) -> bool {
+        (self.0 & Self::FLAG_MATTA) != 0
+    }
 }
 
 impl std::fmt::Debug for Move {
@@ -1515,10 +1528,12 @@ impl std::fmt::Debug for Move {
                 src: Square,
                 dst: Square,
                 promo: bool,
+                matta: bool,
             },
             Drop {
                 pk: PieceKind,
                 dst: Square,
+                matta: bool,
             },
         }
 
@@ -1530,12 +1545,14 @@ impl std::fmt::Debug for Move {
             MoveDebug::Drop {
                 pk: self.dropped_piece_kind(),
                 dst: self.dst(),
+                matta: self.is_matta(),
             }
         } else {
             MoveDebug::Walk {
                 src: self.src(),
                 dst: self.dst(),
                 promo: self.is_promotion(),
+                matta: self.is_matta(),
             }
         };
 
@@ -1558,6 +1575,10 @@ impl std::fmt::Display for Move {
             }
         }
 
+        if self.is_matta() {
+            f.write_str("(待った)")?;
+        }
+
         Ok(())
     }
 }
@@ -1572,6 +1593,7 @@ impl std::fmt::Display for Move {
 /// * bit15:    成りか
 /// * bit16-20: 移動元の駒(陣営の区別あり。駒打ちなら意味を持たない)
 /// * bit21-25: 捕獲した駒(陣営の区別あり。駒取りでない場合 `NO_PIECE`, 即ち 0)
+/// * bit31:    待ったを用いて進行度を進めるか
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[repr(transparent)]
 pub struct UndoableMove(u32);
@@ -1579,6 +1601,7 @@ pub struct UndoableMove(u32);
 impl UndoableMove {
     const FLAG_DROP: u32 = Move::FLAG_DROP;
     const FLAG_PROMOTION: u32 = Move::FLAG_PROMOTION;
+    const FLAG_MATTA: u32 = Move::FLAG_MATTA;
 
     /// 駒を動かす指し手から `UndoableMove` を作る。
     ///
@@ -1692,6 +1715,11 @@ impl UndoableMove {
 
         PieceKind((self.0 >> 7) & 0x7F)
     }
+
+    /// 待ったフラグを返す。
+    pub const fn is_matta(self) -> bool {
+        (self.0 & Self::FLAG_MATTA) != 0
+    }
 }
 
 impl From<UndoableMove> for Move {
@@ -1712,10 +1740,12 @@ impl std::fmt::Debug for UndoableMove {
                 promo: bool,
                 pc_src: Piece,
                 pc_captured: Piece,
+                matta: bool,
             },
             Drop {
                 pk: PieceKind,
                 dst: Square,
+                matta: bool,
             },
         }
 
@@ -1727,6 +1757,7 @@ impl std::fmt::Debug for UndoableMove {
             UndoableMoveDebug::Drop {
                 pk: self.dropped_piece_kind(),
                 dst: self.dst(),
+                matta: self.is_matta(),
             }
         } else {
             UndoableMoveDebug::Walk {
@@ -1735,6 +1766,7 @@ impl std::fmt::Debug for UndoableMove {
                 promo: self.is_promotion(),
                 pc_src: self.piece_src(),
                 pc_captured: self.piece_captured(),
+                matta: self.is_matta(),
             }
         };
 
@@ -1758,6 +1790,10 @@ impl std::fmt::Display for UndoableMove {
             if self.piece_captured() != NO_PIECE {
                 write!(f, " (捕獲: {})", self.piece_captured().kind())?;
             }
+        }
+
+        if self.is_matta() {
+            f.write_str("(待った)")?;
         }
 
         Ok(())
