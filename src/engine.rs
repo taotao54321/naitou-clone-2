@@ -368,19 +368,9 @@ impl Engine {
     /// `mv_hum` は少なくとも疑似合法手でなければならない。これが自殺手の場合、エラーを返す。
     /// (原作通り、HUM 側の打ち歩詰めは許される)
     ///
-    /// `mv_hum` が待ったフラグを持つ場合、待ったで進行度を進める技を使うものとみなす。
-    /// 具体的には、進行度が 0 ならば進行度 1, サブ進行度 5 とする。
-    /// (進行度 2 以上についてはどうせ意味を持たないので考慮しない)
-    /// この場合でも `undo_step()` を行った際は待った技を使う前の状態に戻る。
-    ///
     /// `self` が保持する局面は HUM の手番でなければならない。
     pub fn do_step(&mut self, mv_hum: Move) -> anyhow::Result<EngineResponse> {
         let undo_info = self.do_move_hum(mv_hum)?;
-
-        if mv_hum.is_matta() && self.progress_level == 0 {
-            self.progress_level = 1;
-            self.progress_level_sub = 5;
-        }
 
         let resp_raw = self.think(Some(mv_hum));
 

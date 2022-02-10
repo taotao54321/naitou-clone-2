@@ -4,8 +4,6 @@ use crate::shogi::*;
 /// 合法性チェックは一切行わない。
 ///
 /// 開始局面が平手初期局面の場合、局面文字列は "startpos" になる。
-///
-/// 待ったフラグを持つ指し手は先頭に '!' を付けて表す(独自拡張)。
 pub fn sfen_encode<T>(side_to_move: Side, board: &Board, hands: &Hands, mvs: T) -> String
 where
     T: AsRef<[Move]>,
@@ -214,11 +212,6 @@ pub fn sfen_encode_move(mv: Move) -> String {
 /// 指し手を sfen 指し手文字列にエンコードし、既存の文字列に追記する。
 /// 合法性チェックは一切行わない。
 fn sfen_encode_move_impl(mv: Move, s: &mut String) {
-    // 待ったフラグを持つ指し手は先頭に '!' を付けて表す(独自拡張)。
-    if mv.is_matta() {
-        s.push('!');
-    }
-
     if mv.is_drop() {
         sfen_encode_move_drop(mv, s);
     } else {
@@ -270,17 +263,4 @@ fn sfen_encode_move_drop_piece_kind(pk: PieceKind, s: &mut String) {
         _ => panic!("invalid drop piece kind: {:?}", pk),
     };
     s.push(c);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_matta() {
-        assert_eq!(
-            sfen_encode_move(Move::new_matta(Move::new_walk(SQ_77, SQ_76))),
-            "!7g7f"
-        );
-    }
 }
